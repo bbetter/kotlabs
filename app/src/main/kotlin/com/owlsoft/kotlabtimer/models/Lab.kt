@@ -1,5 +1,7 @@
 package com.owlsoft.kotlabtimer.models
 
+import io.realm.RealmObject
+import io.realm.annotations.PrimaryKey
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -39,19 +41,22 @@ enum class Status{
     }
 }
 
-data class Lab(var id:Int,var theme:String,var due_date:String){
+open class Lab: RealmObject() {
+
+    @PrimaryKey
+    var id:Int = -1
+    var theme:String = "no-theme"
+    var due_date:String = ""
+
     fun isDeadline():Boolean = due_date.timeInMillis() <= Calendar.getInstance().timeInMillis
 
     /**
      * add status recognition
      */
-    fun getStatus():Status = Status.statusFor(due_date.timeInMillis() - Calendar.getInstance().timeInMillis)
+    fun getStatus():Status = Status.statusFor(due_date!!.timeInMillis() - Calendar.getInstance().timeInMillis)
 }
 
 fun String.timeInMillis(): Long {
     return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.sssZ").parse(this).time
 }
 
-fun String.dateObject():Date{
-    return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.sssZ").parse(this)
-}

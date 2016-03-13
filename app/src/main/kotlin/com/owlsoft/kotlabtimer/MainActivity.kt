@@ -15,12 +15,19 @@ import com.github.kittinunf.fuel.core.Response
 import com.owlsoft.kotlabtimer.models.Lab
 import com.owlsoft.kotlabtimer.models.LabAdapter
 import com.owlsoft.kotlabtimer.services.LabService
+import io.realm.Realm
 import kotlinx.android.synthetic.main.activity_main.*
 import java.util.concurrent.ScheduledFuture
+import kotlin.properties.Delegates
 
+//explicitly imported extension
+import com.owlsoft.kotlabtimer.extensions.transaction
+import io.realm.RealmConfiguration
 
 class MainActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefreshListener {
     private lateinit var alarmManager: AlarmManager
+    private var realm: Realm by Delegates.notNull()
+    private var realmConfig: RealmConfiguration by Delegates.notNull()
 
     override fun onRefresh() {
         updateLabs()
@@ -40,28 +47,61 @@ class MainActivity : AppCompatActivity(), SwipeRefreshLayout.OnRefreshListener {
         refreshLayout.setOnRefreshListener(this)
         recyclerView.layoutManager = linearLayoutManager
         recyclerView.adapter = labAdapter
-        updateLabs()
+
+        initRealm()
+
+        fetchFromDatabase {
+            labs ->
+            if (labs.size > 0) labAdapter?.data = labs.toList() else updateLabs()
+        }
+        realm.addChangeListener {
+            fetchFromDatabase {
+                labs ->
+                labs
+                        .filter { !it.isDeadline() }
+                        .forEach {
+                            var intent: Intent = Intent(applicationContext, AlarmReceiver::class.java);
+
+                            intent.putExtra("id", it.id)
+                            intent.putExtra("theme", it.theme);
+                            intent.putExtra("status", it.getStatus())
+
+                            var pendingIntent: PendingIntent = PendingIntent.getBroadcast(applicationContext, 1, intent, 0)
+                            alarmManager.cancel(pendingIntent)
+                            alarmManager.set(
+                                    AlarmManager.RTC_WAKEUP,
+                                    it.getStatus().millis(),
+                                    pendingIntent
+                            );
+                        }
+            }
+        }
+    }
+
+    private fun initRealm() {
+        // Create configuration and reset Realm.
+        realmConfig = RealmConfiguration.Builder(this).build()
+//        Realm.deleteRealm(realmConfig)
+
+        // Open the realm for the UI thread.
+        realm = Realm.getInstance(realmConfig)
+    }
+
+
+    fun fetchFromDatabase(callback: (List<Lab>) -> Unit) {
+        callback.invoke(realm.allObjects(Lab::class.java))
     }
 
 
     fun updateLabs() {
         LabService.getLabs(handler = object : com.github.kittinunf.fuel.core.Handler<List<Lab>> {
             override fun success(request: Request, response: Response, value: List<Lab>) {
-                labAdapter?.data = value
-                value.filter { !it.isDeadline() }.forEach {
-                    var intent: Intent = Intent(applicationContext, AlarmReceiver::class.java);
-                    intent.putExtra("id",it.id)
-                    intent.putExtra("theme", it.theme);
-                    intent.putExtra("status", it.getStatus())
-                    var pendingIntent: PendingIntent = PendingIntent.getBroadcast(applicationContext, 1, intent, 0)
-
-                    alarmManager.cancel(pendingIntent)
-                    alarmManager.set(
-                            AlarmManager.RTC_WAKEUP,
-                            it.getStatus().millis() ,
-                            pendingIntent
-                    );
+                realm.transaction { realm.copyToRealmOrUpdate(value) }
+                fetchFromDatabase {
+                    labs->
+                    labAdapter?.data = labs.toList()
                 }
+
                 refreshLayout.isRefreshing = false
             }
 

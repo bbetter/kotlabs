@@ -9,15 +9,12 @@ import android.view.ViewGroup
 import com.owlsoft.kotlabtimer.R
 import kotlinx.android.synthetic.main.item_lab.view.*
 import java.util.*
-import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
 
 /**
  * Created by mac on 26.02.16.
  */
 class LabAdapter : RecyclerView.Adapter<LabAdapter.LabHolder>() {
-    var mainHandler: Handler = Handler(Looper.getMainLooper());
     var data: List<Lab>? = null
         set(value) {
             field = value?.sortedBy { !it.isDeadline() }
@@ -31,25 +28,22 @@ class LabAdapter : RecyclerView.Adapter<LabAdapter.LabHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup?, viewType: Int): LabHolder? {
         val view = LayoutInflater.from(parent?.context).inflate(R.layout.item_lab, parent, false)
-        val labHolder: LabHolder = LabHolder(view, {})
+        val labHolder: LabHolder = LabHolder(view)
         return labHolder
     }
 
     override fun onBindViewHolder(labHolder: LabHolder?, position: Int) {
-        labHolder?.bindLab(data?.get(position) as Lab, mainHandler)
+        labHolder?.bindLab(data?.get(position) as Lab)
     }
 
-    class LabHolder(view: View, val itemClick: (Lab) -> Unit) : RecyclerView.ViewHolder(view) {
-        var mainHandler: Handler? = null
+    class LabHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val handler: Handler = Handler()
         var executor: ScheduledFuture<*>? = null
 
-        fun bindLab(lab: Lab, handler: Handler) {
-            mainHandler = handler
+        fun bindLab(lab: Lab) {
             with(lab) {
-
-                if (executor == null) {
-                    executor = Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate({
-
+                handler.postDelayed(object :Runnable{
+                    override fun run():Unit {
                         if (isDeadline()) {
                             itemView.setBackgroundColor(itemView.context.resources.getColor(android.R.color.holo_red_dark))
                             itemView.dueto.text = "Deadline has come...:)"
@@ -62,13 +56,11 @@ class LabAdapter : RecyclerView.Adapter<LabAdapter.LabHolder>() {
                             var diffHours = diff / (60 * 60 * 1000) % 24;
                             var diffDays = diff / (24 * 60 * 60 * 1000);
 
-                            mainHandler?.post {
-                                itemView.dueto.text = "${diffDays}d:${diffHours}h:${diffMinutes}m:${diffSeconds}s"
-                            }
+                            itemView.dueto.text = "${diffDays}d:${diffHours}h:${diffMinutes}m:${diffSeconds}s"
+                            handler.postDelayed(this, 1000)
                         }
-                    }, 0, 1000, TimeUnit.MILLISECONDS)
-
-                }
+                    }
+                }, 1000)
 
                 if (isDeadline())
                     itemView.setBackgroundColor(itemView.context.resources.getColor(android.R.color.holo_red_dark))
@@ -76,7 +68,6 @@ class LabAdapter : RecyclerView.Adapter<LabAdapter.LabHolder>() {
                     itemView.setBackgroundColor(itemView.context.resources.getColor(android.R.color.white))
 
                 itemView.theme.text = theme
-                itemView.theme.setOnClickListener { itemClick.invoke(lab) }
             }
         }
     }
