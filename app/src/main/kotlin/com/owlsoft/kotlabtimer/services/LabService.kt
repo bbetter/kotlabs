@@ -7,6 +7,7 @@ import com.github.kittinunf.result.Result
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.owlsoft.kotlabtimer.models.Lab
+import com.owlsoft.kotlabtimer.models.Parser
 import java.lang.reflect.Type
 
 /**
@@ -25,7 +26,7 @@ fun <T:Any> Request.responseWithObject(handler: Handler<T>, entityClass: Type) {
                 handler.failure(request,response,result.error)
             }
             is Result.Success -> {
-                handler.success(request,response, Gson().fromJson(result.get(),entityClass))
+                handler.success(request,response, Parser.gson.fromJson(result.get(),entityClass))
             }
         }
     }
